@@ -1,0 +1,127 @@
+---
+title: "**Survival Analysis of Chargeoff Data**"
+subtitle: |
+  Samuel Nankervis, Evelyn Zhuang, Kay Ferrin\
+  Southern Utah University\
+  Fundamentals of Data Science\
+  Dr. Rick Brown\
+  [DATE]
+format: 
+  html:
+    embed-resources: true # Keep this so the html file is easily shareable.
+urlcolor: blue
+execute: # Will set these as the default for all code chunks
+  eval: true
+  echo: true
+editor_options: 
+  chunk_output_type: console
+---
+<!--
+the organization of the header might need to be updated to look more professional, but I just copied his formatting on the homeworks. also this is how to comment in the quarto document. We could even include a fancy front page like in this link: https://github.com/nmfs-opensci/quarto_titlepages/blob/main/example_1.pdf
+-->
+
+# Introduction
+
+<!--
+I usually do the introduction last, so I'll leave this blank for now but it should say [something something knowing when loans default is useful so we wanted to know how to do that etc.]
+-->
+::: {style="text-indent: 30px;"}
+This indents a paragraph
+:::
+
+# The Data
+
+::: {style="text-indent: 30px;"}
+Our dataset came from State Bank of Southern Utah's Loan charge off data. It includes all loans that charged off from 1979 to 2026. While a mixed data set that had both loans that charged off and loans that didn't would be ideal for using cox regression, State Bank of Southern Utah currently doesn't have a dataset with this combined data. Therefore, interpretations of the data will be assuming that the loans issued will charge off at some point, even through this is an unrealistic assumption to make for most real world applications. Despite this limitation of the data, much of the methodology used later in this report can easily be transferred to another data set that does include a mix of data. 
+:::
+
+Our original data contains several variables:
+
+**Application Code** ***(categorical)***: If the loan was applied for under **Commercial Credit (CC)**, **Consumer Installment (CI)**, or **Commercial Real Estate (CR)**
+
+**Product** ***(categorical)***: the type of loan issued. 
+
+**Interest Rate** ***(continuous)***: the nominal convertible monthly rate associated with the loan.
+
+**Original Note Date** ***(Discrete)***: The date the loan was issued.
+
+**Original Maturity Date** ***(Discrete)***: The date the loan was intended to mature.
+
+**Current Maturity Date** ***(Discrete)***: The maturity date after loan modifications to assist payment.
+
+**Charge Off Date** ***(Discrete)***: The date the loan was charged off.
+
+**Original Loan Amount** ***(continuous)***: The amount borrowed.
+
+**Total Chargeoff** ***(continuous)***: The amount charged off, or deemed noncollectable at the Charge Off Date.
+
+**LTD Recovery Amount** ***(continuous)***: the amount that was collected after the loan was charged off up until the data was retrieved. 
+
+::: {style="text-indent: 30px;"}
+Most of the variables will be useful for predicting survival time, but not in their current form. We can derive the time in days to maturity by subtracting the Charge Off Date by the Original Note Date. Similarly, we can get the original term of the loan by subtracting the Original Maturity Date by the Original Note Date. We can also get an effective annual rate from the monthly nominal rate. We will also calculate what the payment per month would be assuming constant interest rate and payments by using the present value of an annuity formula and solving for the payments. These variables will be useful for our data analysis.
+:::
+
+Our predictor variables will be:
+
+**Effective Annual Rate (EAR)** ***(continuous)***: the EAR associated with the loan.
+
+**Monthly Payment** ***(continuous)***: the Payments per month of the loan assuming constant payments and interest.
+<!--
+Note that there may be multicolineariy issues with this specific variable since it is just the result of an equation using the interest rate, term of the loan, and loan amount.
+-->
+
+**Time to Maturity** ***(continuous)***: Time in days until the loan was originally intended to mature.
+
+**Original Loan Amount** ***(continuous)***: The amount borrowed.
+
+**Product** ***(categorical)***: the type of loan issued.
+
+**Application Code** ***(categorical)***: If the loan was applied for under **Commercial Credit (CC)**, **Consumer Installment (CI)**, or **Commercial Real Estate (CR)**
+
+Our response variable will be:
+
+**Time to Charge Off** ***(continuous)***: Time in days until the loan was Charged Off.
+
+::: {style="text-indent: 30px;"}
+Now that we have our variables, we need to clean up the data so it doesn't include innacurate or biased observations. Two types of loan under the Product variable, "Chargeoff Surecash/Visa" and "Surecash", do not have accurate Maturity Dates, so they will be removed from the dataset. Another Product, "Interest Only Home Equity", often has no Maturity Date. This is because Interest Only Home Equity loans do not have a principal reduction These will be removed from the dataset to avoid outliers. The same goes for "Home Equity 97" Products since they also have no end date.  
+_NOTE: I actually don't know how best to handle these. right now these loans are set to mature in the year 9999, but I don't know if having massive outlines like that will hurt our model performance so I think removing them will be best. 
+
+We also need to remove any loans that had an  Original Maturity Date after when we retrieved the data on March 5th. We will also remove any loans with Original Note Dates after 2015. The reason we are excluding future loans and loans starting after 2015 is because we don't have data on all the loans, but only the ones that have already been charged off. This causes a problem for us since We don't have data on loans that will be charged off in the future. Because of this, the data we do have on recent loans will be biased towards loans that charge off quickly after being issued. We also have the issue that there is no data on loans yet to be charged off, so we have no censored data, a requirement of our Cox regression model, so we will remove dates after 2015 to simulate censored data. To reiterate, we would not need to transform the data this way if we had data on all loans. With our data cleaned, we will now need to find a statistical model to predict survival time from our predictor variables. 
+:::
+
+# Cox Regression
+<!--
+This section will talk about what cox regression is and how it works. I think it should transition well with the last section.
+
+
+Here's some general info on Cox regression I'm putting in here so I don't loose the link:
+
+https://numiqo.com/tutorial/cox-regression
+https://diogoribeiro7.github.io/finance/data%20science/risk%20modeling/survival_analysis_applied_finance/#case-studies
+https://www.kaggle.com/datasets/mannekuntanagendra/survival-analysis-in-r-studio
+https://www.youtube.com/watch?v=vtOj8-3bI3M
+-->
+
+#Code
+<!--
+Here's some basic code to get the data loaded. We'll probably rename and move this section later.
+-->
+
+```{r}
+#| label: Load Packages and working directory
+#| code-fold: true
+#| code-summary: "Show code"
+
+suppressPackageStartupMessages(library(math3190package))
+
+#note, this will need to be changed to your working directory here and also at the top of the quarto document if you want to use the working directory past this chunk.
+setwd("C:\\Users\\Samuel\\Desktop\\R-scripts-and-data\\MATH3190\\Final\\Cleaned_Data")
+Chargeoff_Data = read.csv("Cleaned_Chargeoff_Data.csv")
+```
+
+```{r}
+#| label: show original data
+
+#Note: some of the columns are being receive as a string when it should be an integer. we will probably need to use mutate to change that.
+head(Chargeoff_Data)
+```
