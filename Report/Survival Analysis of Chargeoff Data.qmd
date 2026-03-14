@@ -80,13 +80,14 @@ Note that there may be multicolineariy issues with this specific variable since 
 
 Our response variable will be:
 
-**Time to Charge Off** ***(continuous)***: Time in days until the loan was Charged Off.
+**Time to Charge Off** ***(continuous)***: Time in days until the loan was Charged Off. _NOTE-K: would this be discrete since it's in days?
 
 ::: {style="text-indent: 30px;"}
 Now that we have our variables, we need to clean up the data so it doesn't include innacurate or biased observations. Two types of loan under the Product variable, "Chargeoff Surecash/Visa" and "Surecash", do not have accurate Maturity Dates, so they will be removed from the dataset. Another Product, "Interest Only Home Equity", often has no Maturity Date. This is because Interest Only Home Equity loans do not have a principal reduction These will be removed from the dataset to avoid outliers. The same goes for "Home Equity 97" Products since they also have no end date.  
-_NOTE: I actually don't know how best to handle these. right now these loans are set to mature in the year 9999, but I don't know if having massive outlines like that will hurt our model performance so I think removing them will be best. 
+_NOTE: I actually don't know how best to handle these. right now these loans are set to mature in the year 9999, but I don't know if having massive outlines like that will hurt our model performance so I think removing them will be best.
+_NOTE-K: Agreed!
 
-We also need to remove any loans that had an  Original Maturity Date after when we retrieved the data on March 5th. We will also remove any loans with Original Note Dates after 2015. The reason we are excluding future loans and loans starting after 2015 is because we don't have data on all the loans, but only the ones that have already been charged off. This causes a problem for us since We don't have data on loans that will be charged off in the future. Because of this, the data we do have on recent loans will be biased towards loans that charge off quickly after being issued. We also have the issue that there is no data on loans yet to be charged off, so we have no censored data, a requirement of our Cox regression model, so we will remove dates after 2015 to simulate censored data. To reiterate, we would not need to transform the data this way if we had data on all loans. With our data cleaned, we will now need to find a statistical model to predict survival time from our predictor variables. 
+We also need to remove any loans that had an  Original Maturity Date after when we retrieved the data on March 5th. We will also remove any loans with Original Note Dates after 2015. The reason we are excluding future loans and loans starting after 2015 is because we don't have data on all the loans, but only the ones that have already been charged off. This causes a problem for us since we don't have data on loans that will be charged off in the future. Because of this, the data we do have on recent loans will be biased towards loans that charge off quickly after being issued. We also have the issue that there is no data on loans yet to be charged off, so we have no censored data, a requirement of our Cox regression model, so we will remove dates after 2015 to simulate censored data._NOTE-K: by that, do you mean you kept ones that were not charged off yet in 2015 as the "censored" data? ie still "alive" at time of data collection/no further data on when chargeoff occurred? Or do you mean you removed them completely?_ To reiterate, we would not need to transform the data this way if we had data on all loans. With our data cleaned, we will now need to find a statistical model to predict survival time from our predictor variables. 
 :::
 
 # Cox Regression
@@ -101,6 +102,11 @@ https://diogoribeiro7.github.io/finance/data%20science/risk%20modeling/survival_
 https://www.kaggle.com/datasets/mannekuntanagendra/survival-analysis-in-r-studio
 https://www.youtube.com/watch?v=vtOj8-3bI3M
 -->
+
+_NOTE-K: I started writing this out to introduce Cox Regression... let me know if it makes sense!
+  The time it takes for a loan to chargeoff is a type of "survival time," as it is the time until an event that cannot happen multiple times and ends an interval (of loan collection). Survival time probabilities can be successfully used for risk modeling in similar cases, such as for creating expected credit loss profiles (https://diogoribeiro7.github.io/finance/data%20science/risk%20modeling/survival_analysis_applied_finance/#case-studies). Survival time analysis can be done through Cox Regression, also called Cox Proportional Hazards Survival Regression. This method allows us to predict the changing rates associated with the hazard (loan chargeoff in our case) over time, alongside relevant covariates and groupings like we might apply to any other regression. 
+  In order to perform a Cox regression, we need to know an amount of time, in our case the time from start of loan until chargeoff, which is used as our response variable. It is also important, with Cox regression specifically, to acknowledge censored data. Censored data is data for which the outcome of interest (loan chargeoff, death, etc) has not yet occurred. This data is not useless, as we know up to a certain point that they "survived" (in our case, that they have not been charged off), but we do not know how long it would take them to get to that point. Cox regression can use this type of data alongside data where the final outcome (loan chargeoff) has already occurred, unlike some other forms of regression. We need a column in our dataset marking particular observations with whether or not the event occurred, so that we do not mistakenly represent censored data as uncensored (the time interval being representative of time until event instead of representing how long we know the event did not yet occur). 
+  We can use both categorical and quantitative predictor variables in Cox regression, with time automatically acting as a predictor as well. The probability of default at the beginning is not the same as after some time has passed, and the Cox regression format accounts for this.
 
 #Code
 <!--
@@ -123,5 +129,6 @@ Chargeoff_Data = read.csv("Cleaned_Chargeoff_Data.csv")
 #| label: show original data
 
 #Note: some of the columns are being receive as a string when it should be an integer. we will probably need to use mutate to change that.
+#Note-K: The ones with "$" in them are probably the issue, and I'm not 100% sure how to get rid of those.
 head(Chargeoff_Data)
 ```
