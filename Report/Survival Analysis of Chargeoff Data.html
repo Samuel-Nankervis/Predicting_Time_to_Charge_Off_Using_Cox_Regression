@@ -3127,9 +3127,9 @@ I usually do the introduction last, so I'll leave this blank for now but it shou
 <p>Our dataset came from State Bank of Southern Utah’s Loan charge off data. It includes all loans that charged off from 1979 to 2026. While a mixed data set that had both loans that charged off and loans that didn’t would be ideal for using cox regression, State Bank of Southern Utah currently doesn’t have a dataset with this combined data. Therefore, interpretations of the data will be assuming that the loans issued will charge off at some point, even through this is an unrealistic assumption to make for most real world applications. Despite this limitation of the data, much of the methodology used later in this report can easily be transferred to another data set that does include a mix of data.</p>
 </div>
 <p>Our original data contains several variables:</p>
-<p><strong>Application Code</strong> <strong><em>(categorical)</em></strong>: If the loan was applied for under <strong>Commercial Credit (CC)</strong>, <strong>Consumer Installment (CI)</strong>, or <strong>Commercial Real Estate (CR)</strong></p>
+<p><strong>Application Code</strong> <strong><em>(categorical)</em></strong>: The application codes indicate the type of loan on a broad perspective, <strong>Commercial Loans (CC)</strong>, <strong>Installment or traditional Consumer Loans (CI)</strong>, or <strong>Real Estate (CR)</strong></p>
 <p><strong>Product</strong> <strong><em>(categorical)</em></strong>: the type of loan issued.</p>
-<p><strong>Interest Rate</strong> <strong><em>(continuous)</em></strong>: the nominal convertible monthly rate associated with the loan.</p>
+<p><strong>Interest Rate</strong> <strong><em>(continuous)</em></strong>: the effective annual rate associated with the loan.</p>
 <p><strong>Original Note Date</strong> <strong><em>(Discrete)</em></strong>: The date the loan was issued.</p>
 <p><strong>Original Maturity Date</strong> <strong><em>(Discrete)</em></strong>: The date the loan was intended to mature.</p>
 <p><strong>Current Maturity Date</strong> <strong><em>(Discrete)</em></strong>: The maturity date after loan modifications to assist payment.</p>
@@ -3138,7 +3138,7 @@ I usually do the introduction last, so I'll leave this blank for now but it shou
 <p><strong>Total Chargeoff</strong> <strong><em>(continuous)</em></strong>: The amount charged off, or deemed noncollectable at the Charge Off Date.</p>
 <p><strong>LTD Recovery Amount</strong> <strong><em>(continuous)</em></strong>: the amount that was collected after the loan was charged off up until the data was retrieved.</p>
 <div style="text-indent: 30px;">
-<p>Most of the variables will be useful for predicting survival time, but not in their current form. We can derive the time in days to maturity by subtracting the Charge Off Date by the Original Note Date. Similarly, we can get the original term of the loan by subtracting the Original Maturity Date by the Original Note Date. We can also get an effective annual rate from the monthly nominal rate. We will also calculate what the payment per month would be assuming constant interest rate and payments by using the present value of an annuity formula and solving for the payments. These variables will be useful for our data analysis.</p>
+<p>Most of the variables will be useful for predicting survival time, but not in their current form. We can derive the time in days to maturity by subtracting the Charge Off Date by the Original Note Date. Similarly, we can get the original term of the loan by subtracting the Original Maturity Date by the Original Note Date. We can also get an effective monthly rate from the effective annual rate, which will be helpful for time value of money calculations. We will also calculate what the payment per month would be assuming constant interest rate and payments by using the present value of an annuity formula and solving for the payments. These variables will be useful for our data analysis.</p>
 </div>
 <p>Our predictor variables will be:</p>
 <p><strong>Effective Annual Rate (EAR)</strong> <strong><em>(continuous)</em></strong>: the EAR associated with the loan.</p>
@@ -3148,13 +3148,22 @@ Note that there may be multicolineariy issues with this specific variable since 
 <p><strong>Time to Maturity</strong> <strong><em>(continuous)</em></strong>: Time in days until the loan was originally intended to mature.</p>
 <p><strong>Original Loan Amount</strong> <strong><em>(continuous)</em></strong>: The amount borrowed.</p>
 <p><strong>Product</strong> <strong><em>(categorical)</em></strong>: the type of loan issued.</p>
-<p><strong>Application Code</strong> <strong><em>(categorical)</em></strong>: If the loan was applied for under <strong>Commercial Credit (CC)</strong>, <strong>Consumer Installment (CI)</strong>, or <strong>Commercial Real Estate (CR)</strong></p>
+<p><strong>Application Code</strong> <strong><em>(categorical)</em></strong>: The type of loan on a broad perspective, <strong>Commercial Loans (CC)</strong>, <strong>Installment or traditional Consumer Loans (CI)</strong>, or <strong>Real Estate (CR)</strong></p>
 <p>Our response variable will be:</p>
-<p><strong>Time to Charge Off</strong> <strong><em>(continuous)</em></strong>: Time in days until the loan was Charged Off.</p>
+<p><strong>Time to Charge Off</strong> <strong><em>(continuous)</em></strong>: Time in days until the loan was Charged Off. _NOTE-K: would this be discrete since it’s in days?</p>
 <div style="text-indent: 30px;">
-<p>Now that we have our variables, we need to clean up the data so it doesn’t include innacurate or biased observations. Two types of loan under the Product variable, “Chargeoff Surecash/Visa” and “Surecash”, do not have accurate Maturity Dates, so they will be removed from the dataset. Another Product, “Interest Only Home Equity”, often has no Maturity Date. This is because Interest Only Home Equity loans do not have a principal reduction These will be removed from the dataset to avoid outliers. The same goes for “Home Equity 97” Products since they also have no end date.<br>
-_NOTE: I actually don’t know how best to handle these. right now these loans are set to mature in the year 9999, but I don’t know if having massive outlines like that will hurt our model performance so I think removing them will be best.</p>
-<p>We also need to remove any loans that had an Original Maturity Date after when we retrieved the data on March 5th. We will also remove any loans with Original Note Dates after 2015. The reason we are excluding future loans and loans starting after 2015 is because we don’t have data on all the loans, but only the ones that have already been charged off. This causes a problem for us since We don’t have data on loans that will be charged off in the future. Because of this, the data we do have on recent loans will be biased towards loans that charge off quickly after being issued. We also have the issue that there is no data on loans yet to be charged off, so we have no censored data, a requirement of our Cox regression model, so we will remove dates after 2015 to simulate censored data. To reiterate, we would not need to transform the data this way if we had data on all loans. With our data cleaned, we will now need to find a statistical model to predict survival time from our predictor variables.</p>
+<p>Now that we have our variables, we need to clean up the data so it doesn’t include innacurate or biased observations. Two types of loan under the Product variable, “Chargeoff Surecash/Visa” and “Surecash”, do not have accurate Maturity Dates, so they will be removed from the dataset. Another Product, “Interest Only Home Equity”, often has no Maturity Date. This is because Interest Only Home Equity loans do not have a principal reduction These will be removed from the dataset to avoid outliers. The same goes for “Home Equity 97” Products since they also have no end date.</p>
+<!--
+_NOTE-S: I actually don't know how best to handle these. right now these loans are set to mature in the year 9999, but I don't know if having massive outlines like that will hurt our model performance so I think removing them will be best.
+_NOTE-K: Agreed!
+-->
+<p>We also need to remove any loans that had an Original Maturity Date after when we retrieved the data on March 5th, 2026. We will also remove any loans with Original Note Dates after 2015. The reason we are excluding loans that were set to end after when we collected the data is because we don’t have data on all the loans, but only the ones that have already been charged off. This causes a problem for us since we don’t have data on loans that will be charged off in the future. Because of this, the data we do have on recent loans will be biased towards loans that charge off quickly after being issued. We also have the issue that there is no data on loans yet to be charged off, so we have no censored data, a requirement of our Cox regression model. So we will simulate censored data by marking all loans that have not charged off by 2015 as censored. This will give us some data that has a piece of the survival time, but not the exact date that the loan will be charged off.</p>
+<!--
+_NOTE-K: by that, do you mean you kept ones that were not charged off yet in 2015 as the "censored" data? ie still "alive" at time of data collection/no further data on when chargeoff occurred? Or do you mean you removed them completely?
+
+_NOTE-S: Sorry I probably could have made that a bit more clear, I've re written it to hopefully be better. I didn't actually remove those dates I just added a variable to loans that were charged off after 2015 that marked them as censored. We don't need to remove the date that these variables charged off, although we wouldn't know when exactly they would have been charged off had we collected data at that point and known that they would charge off at some point. Hopefully that clarifies things. 
+-->
+<p>To reiterate, we would not need to transform the data this way if we had data on all loans. With our data cleaned, we will now need to find a statistical model to predict survival time from our predictor variables.</p>
 </div>
 </section>
 <section id="cox-regression" class="level1">
@@ -3170,6 +3179,10 @@ https://diogoribeiro7.github.io/finance/data%20science/risk%20modeling/survival_
 https://www.kaggle.com/datasets/mannekuntanagendra/survival-analysis-in-r-studio
 https://www.youtube.com/watch?v=vtOj8-3bI3M
 -->
+<!--
+_NOTE-K: I started writing this out to introduce Cox Regression... let me know if it makes sense!
+-->
+<p>The time it takes for a loan to chargeoff is a type of “survival time,” as it is the time until an event that cannot happen multiple times and ends an interval (of loan collection). Survival time probabilities can be successfully used for risk modeling in similar cases, such as for creating expected credit loss profiles (https://diogoribeiro7.github.io/finance/data%20science/risk%20modeling/survival_analysis_applied_finance/#case-studies). Survival time analysis can be done through Cox Regression, also called Cox Proportional Hazards Survival Regression. This method allows us to predict the changing rates associated with the hazard (loan chargeoff in our case) over time, alongside relevant covariates and groupings like we might apply to any other regression. In order to perform a Cox regression, we need to know an amount of time, in our case the time from start of loan until chargeoff, which is used as our response variable. It is also important, with Cox regression specifically, to acknowledge censored data. Censored data is data for which the outcome of interest (loan chargeoff, death, etc) has not yet occurred. This data is not useless, as we know up to a certain point that they “survived” (in our case, that they have not been charged off), but we do not know how long it would take them to get to that point. Cox regression can use this type of data alongside data where the final outcome (loan chargeoff) has already occurred, unlike some other forms of regression. We need a column in our dataset marking particular observations with whether or not the event occurred, so that we do not mistakenly represent censored data as uncensored (the time interval being representative of time until event instead of representing how long we know the event did not yet occur). We can use both categorical and quantitative predictor variables in Cox regression, with time automatically acting as a predictor as well. The probability of default at the beginning is not the same as after some time has passed, and the Cox regression format accounts for this.</p>
 <p>#Code <!--
 Here's some basic code to get the data loaded. We'll probably rename and move this section later.
 --></p>
@@ -3189,7 +3202,9 @@ Here's some basic code to get the data loaded. We'll probably rename and move th
 </details>
 </div>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(Chargeoff_Data)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Note: some of the columns are being receive as a string when it should be an integer. we will probably need to use mutate to change that.</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="co">#Note-K: The ones with &quot;$&quot; in them are probably the issue, and I&#39;m not 100% sure how to get rid of those.</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(Chargeoff_Data)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>  Application_Code Account_Number                             Product
 1               CC         493891 Commercial/Ind.(not prime sec RE)CL
@@ -3198,13 +3213,13 @@ Here's some basic code to get the data loaded. We'll probably rename and move th
 4               CC         509174 Agricultural/Other Lns to Farms -CL
 5               CC         149513 Commercial/Ind.(not prime sec RE)CL
 6               CC         820348 Commercial/Ind.(not prime sec RE)CL
-  Interest_Rate Effective_Monthly_Intrest_Rate Effective_Annual_Intrest_Rate
-1      9.22000%                       0.76833%                      9.61978%
-2      7.50000%                       0.62500%                      7.76326%
-3     11.00000%                       0.91667%                     11.57188%
-4      7.75000%                       0.64583%                      8.03130%
-5     11.75000%                       0.97917%                     12.40390%
-6      7.25000%                       0.60417%                      7.49583%
+  Effective_Annual_Interest_Rate Effective_Monthly_Intrest_Rate
+1                         0.0922                    0.007376575
+2                          0.075                    0.006044919
+3                           0.11                    0.008734594
+4                         0.0775                    0.006239681
+5                         0.1175                    0.009300824
+6                         0.0725                    0.005849741
   Original_Note_Date Original_Maturity_Date Time_To_Maturity
 1           10/25/96               11/25/01             1857
 2            6/29/92                 4/1/99             2467
@@ -3220,12 +3235,12 @@ Here's some basic code to get the data loaded. We'll probably rename and move th
 5               7/15/99         9/30/98                621            $7,061.00
 6               9/25/98         12/7/98                507           $35,102.50
   Monthly_Payment Total_Chargeoff LTD_Recovery_Amount Is_Censored
-1        $278.38        $8,777.03           $4,197.09           0
-2        $982.91       $26,558.85               $0.00           0
-3        $335.52        $4,200.56               $0.00           0
-4      $2,189.81       $50,875.49          $11,882.78           0
-5        $270.44        $4,249.07             $600.00           0
-6     $11,587.38        $5,000.00               $0.00           0</code></pre>
+1        $275.93        $8,777.03           $4,197.09           0
+2        $975.29       $26,558.85               $0.00           0
+3        $334.07        $4,200.56               $0.00           0
+4      $2,181.27       $50,875.49          $11,882.78           0
+5        $268.49        $4,249.07             $600.00           0
+6     $11,582.89        $5,000.00               $0.00           0</code></pre>
 </div>
 </div>
 </section>
