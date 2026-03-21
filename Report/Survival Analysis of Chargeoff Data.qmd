@@ -112,14 +112,32 @@ https://numiqo.com/tutorial/cox-regression
 https://diogoribeiro7.github.io/finance/data%20science/risk%20modeling/survival_analysis_applied_finance/#case-studies
 https://www.kaggle.com/datasets/mannekuntanagendra/survival-analysis-in-r-studio
 https://www.youtube.com/watch?v=vtOj8-3bI3M
+
+_NOTE-K: Here's more:
+https://www.sciencedirect.com/science/article/pii/S1756231716300639 
 -->
 
 <!--
-_NOTE-K: I started writing this out to introduce Cox Regression... let me know if it makes sense!
+_NOTE-K: I added a bit about age to this section.
 -->
   The time it takes for a loan to chargeoff is a type of "survival time," as it is the time until an event that cannot happen multiple times and ends an interval (of loan collection). Survival time probabilities can be successfully used for risk modeling in similar cases, such as for creating expected credit loss profiles (https://diogoribeiro7.github.io/finance/data%20science/risk%20modeling/survival_analysis_applied_finance/#case-studies). Survival time analysis can be done through Cox Regression, also called Cox Proportional Hazards Survival Regression. This method allows us to predict the changing rates associated with the hazard (loan chargeoff in our case) over time, alongside relevant covariates and groupings like we might apply to any other regression. 
   In order to perform a Cox regression, we need to know an amount of time, in our case the time from start of loan until chargeoff, which is used as our response variable. It is also important, with Cox regression specifically, to acknowledge censored data. Censored data is data for which the outcome of interest (loan chargeoff, death, etc) has not yet occurred. This data is not useless, as we know up to a certain point that they "survived" (in our case, that they have not been charged off), but we do not know how long it would take them to get to that point. Cox regression can use this type of data alongside data where the final outcome (loan chargeoff) has already occurred, unlike some other forms of regression. We need a column in our dataset marking particular observations with whether or not the event occurred, so that we do not mistakenly represent censored data as uncensored (the time interval being representative of time until event instead of representing how long we know the event did not yet occur). 
+  Another special feature of the Cox proportional hazards regression is the fact that age can be used as a predictor. Age is complicated to use alongside time series regressions because it changes along with time automatically, but the Cox regression is useful in that it is set up to include this. For the loan charge-off data, age is represented by the amount of time from loan initiation to loan charge-off (or until 2015, which is our censor date), the effective age of the loan.
   We can use both categorical and quantitative predictor variables in Cox regression, with time automatically acting as a predictor as well. The probability of default at the beginning is not the same as after some time has passed, and the Cox regression format accounts for this.
+  
+Mathematics of Cox Regression
+  The following definitions of terms and distributions are relevant for understanding Cox Regression:
+  Time before event of interest: $T \geq 0$ , in our case time to loan chargeoff.
+  Survival function: $S (t) = P(T > t), 0 < t < \infty$ This function represents the probability that an individual survives longer than a particular amount of time. For our data, that means the probability a loan has not been charged off after a certain amount of time.
+   Probability density function: $f(t) = -\dfrac{dS(t)}{dt}$ is the negative derivative of the survival probability function with respect to time. It represents the frequency of the event of interest per period of time.
+   Hazard function: $h(t) = \lim_{\delta t \to 0^+} \dfrac{P(t\leq T < t + \delta t|T\geq t)}{\delta t}$, also represented as $h(t) = f(t)/s(t)$, represents the risk of the event of interest occurring instantly given it has not happened as of time $t$. In other words, what is the risk of the event occurring now if it hasn't yet? For our example, this represents the risk of an immediate loan chargeoff for a loan that hasn't yet charged off after a certain amount of time.
+   Cummulative hazard function: $H(t) = \int_0^t h(u) du$ represents cummulative risk up to a certain time.
+   Relationship between cummulative hazard and survival: $S(t) = e^{-H(t)}$, meaning that higher hazard results in lower probability of survival.
+   Data for a particular individual:
+   $\delta_i$: the censoring indicator, which is 1 if individual $i$ had the event and 0 if they were censored.
+   $t_i$: time of event occurrence or of censoring
+   $x_i$: the covariates (predictors)
+  
 
 #Code
 <!--
@@ -134,7 +152,7 @@ Here's some basic code to get the data loaded. We'll probably rename and move th
 suppressPackageStartupMessages(library(math3190package))
 
 #note, this will need to be changed to your working directory here and also at the top of the quarto document if you want to use the working directory past this chunk.
-setwd("C:\\Users\\Samuel\\Desktop\\R-scripts-and-data\\MATH3190\\Final\\Cleaned_Data")
+setwd("~/Documents/git_connect/Predicting_Time_to_Charge_Off_Using_Cox_Regression")
 Chargeoff_Data = read.csv("Cleaned_Chargeoff_Data.csv")
 ```
 
