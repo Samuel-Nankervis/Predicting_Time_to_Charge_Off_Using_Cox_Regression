@@ -152,8 +152,8 @@ Here's some basic code to get the data loaded. We'll probably rename and move th
 suppressPackageStartupMessages(library(math3190package))
 
 #note, this will need to be changed to your working directory here and also at the top of the quarto document if you want to use the working directory past this chunk.
-setwd("~/Documents/git_connect/Predicting_Time_to_Charge_Off_Using_Cox_Regression")
-Chargeoff_Data = read.csv("Cleaned_Chargeoff_Data.csv")
+#setwd("~/Documents/git_connect/Predicting_Time_to_Charge_Off_Using_Cox_Regression")
+#Chargeoff_Data = read.csv("Cleaned_Chargeoff_Data.csv")
 ```
 
 ```{r}
@@ -161,5 +161,5 @@ Chargeoff_Data = read.csv("Cleaned_Chargeoff_Data.csv")
 
 #Note: some of the columns are being receive as a string when it should be an integer. we will probably need to use mutate to change that.
 #Note-K: The ones with "$" in them are probably the issue, and I'm not 100% sure how to get rid of those.
-head(Chargeoff_Data)
+#head(Chargeoff_Data)
 ```
