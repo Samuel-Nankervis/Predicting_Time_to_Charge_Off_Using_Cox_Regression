@@ -70,7 +70,7 @@ Our predictor variables will be:
 Note that there may be multicolineariy issues with this specific variable since it is just the result of an equation using the interest rate, term of the loan, and loan amount.
 -->
 
-**Time to Maturity** ***(continuous)***: Time in days until the loan was originally intended to mature.
+**Time to Maturity** ***(discrete)***: Time in days until the loan was originally intended to mature.
 
 **Original Loan Amount** ***(continuous)***: The amount borrowed.
 
@@ -80,17 +80,17 @@ Note that there may be multicolineariy issues with this specific variable since 
 
 Our response variable will be:
 
-**Time to Charge Off** ***(continuous)***: Time in days until the loan was Charged Off. _NOTE-K: would this be discrete since it's in days?
+**Time to Charge Off** ***(discrete)***: Time in days until the loan was Charged Off or censored.
 
 ::: {style="text-indent: 30px;"}
-Now that we have our variables, we need to clean up the data so it doesn't include innacurate or biased observations. Two types of loan under the Product variable, "Chargeoff Surecash/Visa" and "Surecash", do not have accurate Maturity Dates, so they will be removed from the dataset. Another Product, "Interest Only Home Equity", often has no Maturity Date. This is because Interest Only Home Equity loans do not have a principal reduction These will be removed from the dataset to avoid outliers. The same goes for "Home Equity 97" Products since they also have no end date.  
+Now that we have our variables, we need to clean up the data so it doesn't include inaccurate or biased observations. Two types of loan under the Product variable, "Chargeoff Surecash/Visa" and "Surecash", do not have accurate Maturity Dates, so they will be removed from the dataset. Another Product, "Interest Only Home Equity", often has no Maturity Date. This is because Interest Only Home Equity loans do not have a principal reduction These will be removed from the dataset to avoid outliers. The same goes for "Home Equity 97" Products since they also have no end date. I also removed loans with zero interest rate because these were most likely null values. 
 
 <!--
 _NOTE-S: I actually don't know how best to handle these. right now these loans are set to mature in the year 9999, but I don't know if having massive outlines like that will hurt our model performance so I think removing them will be best.
 _NOTE-K: Agreed!
 -->
 
-We also need to remove any loans that had an  Original Maturity Date after when we retrieved the data on March 5th, 2026. We will also remove any loans with Original Note Dates after 2015. The reason we are excluding loans that were set to end after when we collected the data is because we don't have data on all the loans, but only the ones that have already been charged off. This causes a problem for us since we don't have data on loans that will be charged off in the future. Because of this, the data we do have on recent loans will be biased towards loans that charge off quickly after being issued. We also have the issue that there is no data on loans yet to be charged off, so we have no censored data, a requirement of our Cox regression model. So we will simulate censored data by marking all loans that have not charged off by 2015 as censored. This will give us some data that has a piece of the survival time, but not the exact date that the loan will be charged off.
+We also need to remove any loans that had an  Original Maturity Date after when we retrieved the data on March 5th, 2026. We will also remove any loans with Original Note Dates after 2018. The reason we are excluding loans that were set to end after when we collected the data is because we don't have data on all the loans, but only the ones that have already been charged off. This causes a problem for us since we don't have data on loans that will be charged off in the future. Because of this, the data we do have on recent loans will be biased towards loans that charge off quickly after being issued. We also have the issue that there is no data on loans yet to be charged off, so we have no censored data, a requirement of our Cox regression model. So we will simulate censored data by marking all loans that have not charged off by 2018 as censored. This will give us some data that has a piece of the survival time, but not the exact date that the loan will be charged off.
 
 <!--
 _NOTE-K: by that, do you mean you kept ones that were not charged off yet in 2015 as the "censored" data? ie still "alive" at time of data collection/no further data on when chargeoff occurred? Or do you mean you removed them completely?
@@ -150,16 +150,200 @@ Here's some basic code to get the data loaded. We'll probably rename and move th
 #| code-summary: "Show code"
 
 suppressPackageStartupMessages(library(math3190package))
+library(survival)
+library(survminer)
+library(GGally)
+library(car)
 
 #note, this will need to be changed to your working directory here and also at the top of the quarto document if you want to use the working directory past this chunk.
-#setwd("~/Documents/git_connect/Predicting_Time_to_Charge_Off_Using_Cox_Regression")
-#Chargeoff_Data = read.csv("Cleaned_Chargeoff_Data.csv")
+
+#I set up variables so we only need to change one word to get it working after pulling it. put your working directory as a string here.
+kay = "~/Documents/git_connect/Predicting_Time_to_Charge_Off_Using_Cox_Regression"
+samuel = "C:\\Users\\Samuel\\Desktop\\R-scripts-and-data\\MATH3190\\Final\\Cleaned_Data"
+evelyn = ""
+
+# put your name here so it takes your working directory
+wd = samuel
+
+setwd(wd)
+Chargeoff_Data = read.csv("Cleaned_Chargeoff_Data.csv")
 ```
 
 ```{r}
-#| label: show original data
-
-#Note: some of the columns are being receive as a string when it should be an integer. we will probably need to use mutate to change that.
-#Note-K: The ones with "$" in them are probably the issue, and I'm not 100% sure how to get rid of those.
-#head(Chargeoff_Data)
+#| label: convert data to numeric
+head(Chargeoff_Data)
+#numeric data is read as a string so we'll mutate it to make it numeric
+Chargeoff_Data_Numeric = mutate(Chargeoff_Data, Effective_Annual_Interest_Rate = as.numeric(Effective_Annual_Interest_Rate), Effective_Monthly_Intrest_Rate = as.numeric(Effective_Monthly_Intrest_Rate), Time_To_Maturity = as.numeric(Time_To_Maturity), Time_to_Charge_Off = as.numeric(Time_to_Charge_Off), Original_Loan_Amount= as.numeric(Original_Loan_Amount), Monthly_Payment = as.numeric(Monthly_Payment), Total_Chargeoff = as.numeric(Total_Chargeoff), LTD_Recovery_Amount = as.numeric(LTD_Recovery_Amount))
 ```
+
+We also need to adjust the Is_Censored variable to make it work better with our survival analysis functions. 
+```{r}
+#| label: fix Is_Censored
+Chargeoff_Data_Numeric = mutate(Chargeoff_Data_Numeric, Is_Censored = as.numeric(Is_Censored)+1)
+```
+
+```{r}
+#| label: summary of data
+summary(Chargeoff_Data_Numeric)
+```
+
+```{r}
+#| label: check how data is distribuited
+
+histogramMaker = function(values,x,y,title){
+  #makes a bar chart for the States
+  df = data.frame(values)
+ggplot(df, aes(x = values)) +
+  geom_histogram(color = "black", fill = "steelblue") +
+  lims(x = c(min(values)-0.05, max(values)+0.05)) +
+  labs(x = x, 
+       y = y,
+       title = title) +
+  theme(axis.title = element_text(size = 16),
+        axis.text = element_text(size = 12),
+        plot.title = element_text(size = 18, face = "bold"))
+}
+
+barchartMaker = function(data, x_var, fill_color = "steelblue", title = NULL) {
+  ggplot(data, aes(x = {{ x_var }})) +
+    geom_bar(fill = fill_color) +
+    labs(
+      title = title,
+      x = substitute(x_var),
+      y = "Count"
+    ) +
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+        legend.position = "None") 
+}
+
+histogramMaker(Chargeoff_Data_Numeric$Effective_Annual_Interest_Rate ,"Effective annual rate","Frequency","")
+
+histogramMaker(Chargeoff_Data_Numeric$Time_To_Maturity ,"Time to Maturity","Frequency","")
+
+histogramMaker(Chargeoff_Data_Numeric$Time_to_Charge_Off ,"Time_to_Charge_Off","Frequency","")
+
+histogramMaker(Chargeoff_Data_Numeric$Monthly_Payment ,"Monthly Payment","Frequency","")
+
+histogramMaker(Chargeoff_Data_Numeric$Original_Loan_Amount ,"Loan amount","Frequency","")
+
+barchartMaker(Chargeoff_Data_Numeric, Is_Censored ,title = "Application codes")
+
+barchartMaker(Chargeoff_Data_Numeric, Application_Code ,title = "Application codes")
+
+barchartMaker(Chargeoff_Data_Numeric, Product ,title = "Types of loans")
+```
+<!--
+_NOTE-S: Might not want to include all of those for brevity but I wrote up code on all of them.
+-->
+
+```{r}
+#| label: check linearity
+chargeoffNoCategorical = select(Chargeoff_Data_Numeric, Effective_Annual_Interest_Rate, Monthly_Payment, Time_To_Maturity, Original_Loan_Amount, Time_to_Charge_Off)
+ggpairs(chargeoffNoCategorical)
+```
+
+A log transform is likely needed for monthly payment and original loan amount because there are many outliers for those variables.
+
+```{r}
+#| label: check log linearity
+logChargeoff = mutate(Chargeoff_Data_Numeric, Monthly_Payment = log(Monthly_Payment), Original_Loan_Amount = log(Original_Loan_Amount))
+chargeoffNoCategorical = select(logChargeoff, Effective_Annual_Interest_Rate, Monthly_Payment, Time_To_Maturity, Original_Loan_Amount, Time_to_Charge_Off)
+
+ggpairs(chargeoffNoCategorical)
+```
+
+There is a strong linear correlation between the log payment and log loan amount. This could cause issues with cox regression, as it is similar to linear regression.
+
+```{r}
+#| label: Cox regression model
+coxMod <- coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment + Time_To_Maturity + Original_Loan_Amount+ Application_Code, data = logChargeoff)
+coxMod
+```
+
+All but time to maturity seem to be significant in this model, but we need to check if the model assumptions are met first before we can be confident that these coefficients are reliable.
+
+<!--
+_NOTE-S: More info here: https://www.sthda.com/english/wiki/cox-model-assumptions
+-->
+
+```{r}
+#| label: Testing Proportional Hazards assumption
+testPH <- cox.zph(coxMod) 
+testPH # If p values are high, we can assume the proportional hazards assumption is met.
+```
+
+Our p values are mostly fine, but the Application_Code and GLOBAL p values are low, indicating that the model doesn't meet the proportional hazards assumption primarily because of the Application_Code variable. To counteract this, we could split the data into three models by application code or stratify the model by application code.
+
+```{r}
+#| label: Stratified Cox regression model
+stratCoxMod <- coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment + Time_To_Maturity + Original_Loan_Amount + strata(Application_Code), data = logChargeoff)
+stratCoxMod
+
+testPH <- cox.zph(stratCoxMod) 
+testPH 
+```
+
+All the p values are high now, indicating the proportional hazards assumption is met! We can also see this graphically by graphing the Schoenfeld residuals against the transformed time. The residuals should be randomly scattered and should form a horizontal line with no real trend as time continues. 
+
+```{r}
+#| label: Graph Cox regression model Schoenfeld residuals
+ggcoxzph(testPH)
+```
+
+The graphs seem mostly good. There is a slight trend downwards with the EAR, but this shouldn't be a major concern.
+Now let's check for influential observations. We do this by plotting the residuals and seeing if they are centered around zero.
+
+```{r}
+#| label: Graph Cox regression model influential obsrvations
+ggcoxdiagnostics(stratCoxMod, type = "dfbeta",
+                 linear.predictions = FALSE, ggtheme = theme_bw())
+
+ggcoxdiagnostics(stratCoxMod, type = "deviance",
+                 linear.predictions = FALSE, ggtheme = theme_bw())
+```
+
+It is fairly symmetric around zero, so we can assume this assumption is reasonably met. 
+Lastly, we need to check if the variables have a linear form. We can check this by plotting the continuous covariates against martingale residuals of the cox proportional hazards model. 
+
+```{r}
+#| label: Graph Cox regression model linearity
+ggcoxfunctional(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment + Time_To_Maturity + Original_Loan_Amount, data = logChargeoff)
+```
+
+The variables don't look great. We will likely need a transformation to fix this. 
+<!--
+_NOTE-S: Don't really know how best to do that.
+-->
+We will also check for multicolinearity concerns using VIF.
+```{r}
+#| label: Cox regression model VIF
+vif(stratCoxMod)
+```
+
+It appears that some of our VIFs are above 5. To compensate, we will drop Time_To_Maturity, because it wasn't significant in our model anyway, and Original_Loan_Amount, because the monthly payment is more indicative of if the borrower will be able to make payments and uses loan amount in its calculation. 
+
+```{r}
+#| label: Cox regression model better VIF
+VifCoxMod <- coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment + strata(Application_Code), data = logChargeoff)
+vif(VifCoxMod)
+```
+
+The VIFs look far better now! Let's check the rest of the assumptions.
+
+```{r}
+#| label: Testing assumptions for Vif model
+testPH <- cox.zph(VifCoxMod) 
+testPH # If p values are high, we can assume the proportional hazards assumption is met.
+
+ggcoxzph(testPH)
+
+ggcoxdiagnostics(VifCoxMod, type = "dfbeta",
+                 linear.predictions = FALSE, ggtheme = theme_bw())
+
+ggcoxdiagnostics(VifCoxMod, type = "deviance",
+                 linear.predictions = FALSE, ggtheme = theme_bw())
+
+ggcoxfunctional(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment, data = logChargeoff)
+```
+
+The other assumptions look good! Now lets try making separate models for each application code to see if they systematically differ in the way interest rate and loan payment affect them.
