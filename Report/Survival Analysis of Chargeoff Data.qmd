@@ -150,10 +150,10 @@ Here's some basic code to get the data loaded. We'll probably rename and move th
 #| code-summary: "Show code"
 
 suppressPackageStartupMessages(library(math3190package))
-library(survival)
-library(survminer)
-library(GGally)
-library(car)
+suppressPackageStartupMessages(library(survival))
+suppressPackageStartupMessages(library(survminer))
+suppressPackageStartupMessages(library(GGally))
+suppressPackageStartupMessages(library(car))
 
 #note, this will need to be changed to your working directory here and also at the top of the quarto document if you want to use the working directory past this chunk.
 
@@ -173,14 +173,9 @@ Chargeoff_Data = read.csv("Cleaned_Chargeoff_Data.csv")
 #| label: convert data to numeric
 head(Chargeoff_Data)
 #numeric data is read as a string so we'll mutate it to make it numeric
-Chargeoff_Data_Numeric = mutate(Chargeoff_Data, Effective_Annual_Interest_Rate = as.numeric(Effective_Annual_Interest_Rate), Effective_Monthly_Intrest_Rate = as.numeric(Effective_Monthly_Intrest_Rate), Time_To_Maturity = as.numeric(Time_To_Maturity), Time_to_Charge_Off = as.numeric(Time_to_Charge_Off), Original_Loan_Amount= as.numeric(Original_Loan_Amount), Monthly_Payment = as.numeric(Monthly_Payment), Total_Chargeoff = as.numeric(Total_Chargeoff), LTD_Recovery_Amount = as.numeric(LTD_Recovery_Amount))
+Chargeoff_Data_Numeric = mutate(Chargeoff_Data, Effective_Annual_Interest_Rate = as.numeric(Effective_Annual_Interest_Rate), Effective_Monthly_Intrest_Rate = as.numeric(Effective_Monthly_Intrest_Rate), Time_To_Maturity = as.numeric(Time_To_Maturity), Time_to_Charge_Off = as.numeric(Time_to_Charge_Off), Original_Loan_Amount= as.numeric(Original_Loan_Amount), Monthly_Payment = as.numeric(Monthly_Payment), Total_Chargeoff = as.numeric(Total_Chargeoff), LTD_Recovery_Amount = as.numeric(LTD_Recovery_Amount), Is_Censored = as.numeric(Is_Censored))
 ```
 
-We also need to adjust the Is_Censored variable to make it work better with our survival analysis functions. 
-```{r}
-#| label: fix Is_Censored
-Chargeoff_Data_Numeric = mutate(Chargeoff_Data_Numeric, Is_Censored = as.numeric(Is_Censored)+1)
-```
 
 ```{r}
 #| label: summary of data
@@ -242,11 +237,11 @@ chargeoffNoCategorical = select(Chargeoff_Data_Numeric, Effective_Annual_Interes
 ggpairs(chargeoffNoCategorical)
 ```
 
-A log transform is likely needed for monthly payment and original loan amount because there are many outliers for those variables.
+A log transform is likely needed for monthly payment and original loan amount because there are many outliers for those variables. I found that taking the log of Effective_Annual_Interest_Rate actually helped the model. This surprised me because taking the log of numbers between 0 and 1 actually exaggerates their differences, but doing this seemed to help some model assumptions get met.
 
 ```{r}
 #| label: check log linearity
-logChargeoff = mutate(Chargeoff_Data_Numeric, Monthly_Payment = log(Monthly_Payment), Original_Loan_Amount = log(Original_Loan_Amount))
+logChargeoff = mutate(Chargeoff_Data_Numeric, Monthly_Payment = log(Monthly_Payment), Original_Loan_Amount = log(Original_Loan_Amount), Effective_Annual_Interest_Rate = log(Effective_Annual_Interest_Rate))
 chargeoffNoCategorical = select(logChargeoff, Effective_Annual_Interest_Rate, Monthly_Payment, Time_To_Maturity, Original_Loan_Amount, Time_to_Charge_Off)
 
 ggpairs(chargeoffNoCategorical)
@@ -260,7 +255,7 @@ coxMod <- coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interes
 coxMod
 ```
 
-All but time to maturity seem to be significant in this model, but we need to check if the model assumptions are met first before we can be confident that these coefficients are reliable.
+A few seem to be significant in this model, but we need to check if the model assumptions are met first before we can be confident that these coefficients are reliable.
 
 <!--
 _NOTE-S: More info here: https://www.sthda.com/english/wiki/cox-model-assumptions
@@ -272,7 +267,7 @@ testPH <- cox.zph(coxMod)
 testPH # If p values are high, we can assume the proportional hazards assumption is met.
 ```
 
-Our p values are mostly fine, but the Application_Code and GLOBAL p values are low, indicating that the model doesn't meet the proportional hazards assumption primarily because of the Application_Code variable. To counteract this, we could split the data into three models by application code or stratify the model by application code.
+Our p values are all Bad! This indicates that the model doesn't meet the proportional hazards assumption primarily because of the Application_Code and Time_To_Maturity variables To counteract this, we could split the data into three models by application code or stratify the model by application code.
 
 ```{r}
 #| label: Stratified Cox regression model
@@ -283,7 +278,7 @@ testPH <- cox.zph(stratCoxMod)
 testPH 
 ```
 
-All the p values are high now, indicating the proportional hazards assumption is met! We can also see this graphically by graphing the Schoenfeld residuals against the transformed time. The residuals should be randomly scattered and should form a horizontal line with no real trend as time continues. 
+The p values are better now that we have stratified the application codes, but the Time_To_Maturity and Original_Loan_Amount variables are causing issues with the proportional hazards assumption. We can also see this graphically by graphing the Schoenfeld residuals against the transformed time. The residuals should be randomly scattered and should form a horizontal line with no real trend as time continues. 
 
 ```{r}
 #| label: Graph Cox regression model Schoenfeld residuals
@@ -310,21 +305,19 @@ Lastly, we need to check if the variables have a linear form. We can check this 
 ggcoxfunctional(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment + Time_To_Maturity + Original_Loan_Amount, data = logChargeoff)
 ```
 
-The variables don't look great. We will likely need a transformation to fix this. 
-<!--
-_NOTE-S: Don't really know how best to do that.
--->
-We will also check for multicolinearity concerns using VIF.
+The variables don't look great. We will likely need to change our model to better meet these assumptions. One potential issue is VIF.
+
 ```{r}
 #| label: Cox regression model VIF
 vif(stratCoxMod)
 ```
 
-It appears that some of our VIFs are above 5. To compensate, we will drop Time_To_Maturity, because it wasn't significant in our model anyway, and Original_Loan_Amount, because the monthly payment is more indicative of if the borrower will be able to make payments and uses loan amount in its calculation. 
+It appears that some of our VIFs are well above 5. To compensate, we will drop Time_To_Maturity and Original_Loan_Amount, because the monthly payment is more indicative of if the borrower will be able to make payments and uses both dropped variables in its calculation. 
 
 ```{r}
 #| label: Cox regression model better VIF
-VifCoxMod <- coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment + strata(Application_Code), data = logChargeoff)
+VifCoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment + strata(Application_Code), data = logChargeoff)
+VifCoxMod
 vif(VifCoxMod)
 ```
 
@@ -332,7 +325,7 @@ The VIFs look far better now! Let's check the rest of the assumptions.
 
 ```{r}
 #| label: Testing assumptions for Vif model
-testPH <- cox.zph(VifCoxMod) 
+testPH = cox.zph(VifCoxMod) 
 testPH # If p values are high, we can assume the proportional hazards assumption is met.
 
 ggcoxzph(testPH)
@@ -346,4 +339,97 @@ ggcoxdiagnostics(VifCoxMod, type = "deviance",
 ggcoxfunctional(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment, data = logChargeoff)
 ```
 
-The other assumptions look good! Now lets try making separate models for each application code to see if they systematically differ in the way interest rate and loan payment affect them.
+We can also check the linearity assumption by plotting the martingale residuals vs the payments. the relation should be mostly linear.
+
+```{r}
+#| label: Graph Cox regression model linearity Testing 
+
+# 1. Fit the model
+res.cox = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + strata(Application_Code), data = logChargeoff)
+# 2. Calculate Martingale residuals
+mart_res <- residuals(res.cox, type = "martingale")
+martChargeoff = mutate(logChargeoff, martRes = mart_res)
+# 3. Plot residuals against the predictor
+ggplot(martChargeoff, aes(x = Monthly_Payment, y = mart_res)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "loess") + # Adds a trend line
+  theme_minimal() +
+  labs(title = "Martingale Residuals vs Monthly_Payment",
+       y = "Martingale Residuals")
+
+# 1. Fit the model
+res.cox <- coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + strata(Application_Code), data = logChargeoff)
+# 2. Calculate Martingale residuals
+mart_res <- residuals(res.cox, type = "martingale")
+martChargeoff = mutate(logChargeoff, martRes = mart_res)
+# 3. Plot residuals against the predictor
+ggplot(martChargeoff, aes(x = Effective_Annual_Interest_Rate, y = mart_res)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "loess") + # Adds a trend line
+  theme_minimal() +
+  labs(title = "Martingale Residuals vs Effective_Annual_Interest_Rate",
+       y = "Martingale Residuals")
+
+
+```
+
+Most of the assumptions look good, but the linearity assumption doesn't look perfect. It's about as close as I can get it to being linear, so we'll go with it despite that.
+
+Now lets try making separate models for each application code to see if they systematically differ in the way interest rate and loan payment affect them.
+
+```{r}
+#| label: Cox regression by Application_Code 
+CCdata = filter(logChargeoff, Application_Code == "CC")
+CRdata = filter(logChargeoff, Application_Code == "CR")
+CIdata = filter(logChargeoff, Application_Code == "CI")
+
+CC_CoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment, data = CCdata)
+CC_CoxMod
+
+CR_CoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment, data = CRdata)
+CR_CoxMod
+
+CI_CoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment, data = CIdata)
+CI_CoxMod
+```
+
+It seems that the coefficients of the models are mostly identical, with one exception being that the effect of Monthly_Payment is a little smaller in Consumer Installment loans. Using stratification makes sense here because individually, we don't get as much data as if we stratify the model and it would appear that the different application types don't systematically differ in the way the variables affect them.  
+
+Let's look at the Survival curve for our final stratified model:
+
+```{r}
+#| label: survival curve 
+FinalCoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment + strata(Application_Code), data = logChargeoff)
+
+fit <- survfit(FinalCoxMod, data = logChargeoff)
+ggsurvplot(fit, 
+           risk.table = TRUE,
+           surv.median.line = "hv", 
+           data = logChargeoff, 
+           conf.int = TRUE,         
+           palette = "Set1",          
+           legend.title = "Application Code", )
+
+```
+
+
+A couple things to note about the survival curve, 
+1. there were four loans that had a time to charge off of more than 5500 days (about 15 years), one of which was a $15.90, 2 year loan from 1982 that lasted over 11,000 days before being charged off. I can't imagine there was any hope this person was tying to pay back their loan 30 years after the loan was issued, so we could use an administrative censor to censor these points at 6000 days after their issuing. This is generally better for our model since we won't have these extreme outliers, and it will make our graph far easier to observe
+
+```{r}
+#| label: censor extreme outliers and redo survival curve
+logChargeoffClean = mutate(logChargeoff, Is_Censored = ifelse(Time_to_Charge_Off > 5500, 1, Is_Censored), Time_to_Charge_Off = ifelse(Time_to_Charge_Off > 5500, 5500, Time_to_Charge_Off))
+
+FinalCoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment + strata(Application_Code), data = logChargeoffClean)
+
+fit <- survfit(FinalCoxMod, data = logChargeoff)
+ggsurvplot(fit, 
+           risk.table = TRUE,
+           surv.median.line = "hv", 
+           data = logChargeoff, 
+           conf.int = TRUE,         
+           palette = "Set1",          
+           legend.title = "Application Code", )
+```
+
+
