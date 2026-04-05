@@ -26,18 +26,20 @@ the organization of the header might need to be updated to look more professiona
 I usually do the introduction last, so I'll leave this blank for now but it should say [something something knowing when loans default is useful so we wanted to know how to do that etc.]
 -->
 ::: {style="text-indent: 30px;"}
-This indents a paragraph
+Understanding credit risk is vital to the success of a lender. If a bank, or another type of lender, lends to too many risky borrowers, its borrowers will most likely be unable to repay their loans and default, causing the bank to incur a loss. If a bank issues to few loans out of fear of default, many opportunities may be lost causing the bank to make a less than optimal profit. Properly balancing when to accept and reject loans requires a solid understanding of how likely a borrower is to repay a loan in full, and for how long they will be able to make payments.<!--I don't know if the following sentence really fits here, but I also know that few people are going to know what I'm referring to in the next sentence, so to avoid confusion I'm just putting the definition here.--> When a lender determines that a loan is uncollectable, usually 3 to 6 months of missed payments, they mark the loan as a charge off to receive a tax benefit for the loss. Our goal is to model the probability of a loan charging off at various times throughout the life of the loan to assist in deciding if a borrower is worth lending to. 
+
+To model these loans, we will Cox regression, a model often used in survival analysis to determine how different factors impact survival time. Cox regression can predict the probability of an event not occurring after a number of days. It is often applied to clinical trials, but can also be used to model credit risk.<!--Whenever I've talked to people about Cox regression, I usually find it easiest to bring up an example of how it can be used rather than just explaining it outright, hence the next paragraph.--> To better explain how Cox regression works, we will briefly describe an example of how it can be used in a clinical trial. If a research group wants to better understand what factors lead to increased survival time of lung cancer patients, they can collect several variables on the patients; like their age, gender, and which treatment they used. Cox regression will let them see the individual impact of each variable on survival time. They can also use data from individuals who dropped out of the study before the event occurred, by marking the data as censored. This is especially useful because data can end after a set interval of time even if there are still individuals who's fate remains unknown. This feature of Cox regression is especially useful for credit risk modeling, because some loans, like a 30 year mortgage, can take a very long time to be repaid in full. Now that we understand the basics of what Cox regression is and how it can be used, lets look at what data we have to work with.
 :::
 
 # The Data
 
 ::: {style="text-indent: 30px;"}
-Our dataset came from State Bank of Southern Utah's Loan charge off data. It includes all loans that charged off from 1979 to 2026. While a mixed data set that had both loans that charged off and loans that didn't would be ideal for using cox regression, State Bank of Southern Utah currently doesn't have a dataset with this combined data. Therefore, interpretations of the data will be assuming that the loans issued will charge off at some point, even through this is an unrealistic assumption to make for most real world applications. Despite this limitation of the data, much of the methodology used later in this report can easily be transferred to another data set that does include a mix of data. 
+Our dataset came from State Bank of Southern Utah's Loan charge off data. It includes all loans that charged off from 1979 to 2026. While a mixed data set that had both loans that charged off and loans that didn't would be ideal for using cox regression, State Bank of Southern Utah currently doesn't have a dataset with this combined data. Therefore, interpretations of the data will be assuming that the loans issued will charge off at some point, even through this is an unrealistic assumption to make since it is impossible to know if a loan will eventually charge off when it is issued. Despite this limitation of the data, much of the methodology used later in this report can easily be transferred to another data set that does include a mix of data, and will therefore be able to be applied to all loans, not just ones that will eventually charge off. 
 :::
 
 Our original data contains several variables:
 
-**Application Code** ***(categorical)***: The application codes indicate the type of loan on a broad perspective, **Commercial Loans (CC)**, **Installment or traditional Consumer Loans (CI)**, or **Real Estate (CR)**
+**Application Code** ***(categorical)***: The application codes indicate the type of loan on a broad perspective, **Commercial Loans (CC)**, **Installment or Traditional Consumer Loans (CI)**, or **Real Estate (CR)**
 
 **Product** ***(categorical)***: the type of loan issued. 
 
@@ -76,7 +78,7 @@ Note that there may be multicolineariy issues with this specific variable since 
 
 **Product** ***(categorical)***: the type of loan issued.
 
-**Application Code** ***(categorical)***: The type of loan on a broad perspective, **Commercial Loans (CC)**, **Installment or traditional Consumer Loans (CI)**, or **Real Estate (CR)**
+**Application Code** ***(categorical)***: The type of loan on a broad perspective, **Commercial Loans (CC)**, **Installment or Traditional Consumer Loans (CI)**, or **Real Estate (CR)**
 
 Our response variable will be:
 
@@ -84,21 +86,19 @@ Our response variable will be:
 
 ::: {style="text-indent: 30px;"}
 Now that we have our variables, we need to clean up the data so it doesn't include inaccurate or biased observations. Two types of loan under the Product variable, "Chargeoff Surecash/Visa" and "Surecash", do not have accurate Maturity Dates, so they will be removed from the dataset. Another Product, "Interest Only Home Equity", often has no Maturity Date. This is because Interest Only Home Equity loans do not have a principal reduction These will be removed from the dataset to avoid outliers. The same goes for "Home Equity 97" Products since they also have no end date. I also removed loans with zero interest rate because these were most likely null values. 
-
 <!--
 _NOTE-S: I actually don't know how best to handle these. right now these loans are set to mature in the year 9999, but I don't know if having massive outlines like that will hurt our model performance so I think removing them will be best.
 _NOTE-K: Agreed!
 -->
 
-We also need to remove any loans that had an  Original Maturity Date after when we retrieved the data on March 5th, 2026. We will also remove any loans with Original Note Dates after 2018. The reason we are excluding loans that were set to end after when we collected the data is because we don't have data on all the loans, but only the ones that have already been charged off. This causes a problem for us since we don't have data on loans that will be charged off in the future. Because of this, the data we do have on recent loans will be biased towards loans that charge off quickly after being issued. We also have the issue that there is no data on loans yet to be charged off, so we have no censored data, a requirement of our Cox regression model. So we will simulate censored data by marking all loans that have not charged off by 2018 as censored. This will give us some data that has a piece of the survival time, but not the exact date that the loan will be charged off.
-
+We also need to remove any loans that had an  Original Maturity Date after when we retrieved the data on March 5th, 2026. We will also remove any loans with Original Note Dates after 2018. The reason we are excluding loans that were set to end after when we collected the data is because we don't have data on all the loans, but only the ones that have already been charged off. This causes a problem for us since we don't have data on loans that will be charged off in the future. Because of this, the data we do have on recent loans will be biased towards loans that charge off quickly after being issued. We also have the issue that there is no data on loans yet to be charged off, so we have no censored data, a requirement of our Cox regression model. So we will simulate censored data by marking all loans that have not charged off by 2018 as censored. This will give us some data that has a piece of the survival time, but not the exact date that the loan will be charged off. To reiterate, we would not need to transform the data this way if we had data on all loans. With our data cleaned, we will now need to find a statistical model to predict survival time from our predictor variables.
 <!--
 _NOTE-K: by that, do you mean you kept ones that were not charged off yet in 2015 as the "censored" data? ie still "alive" at time of data collection/no further data on when chargeoff occurred? Or do you mean you removed them completely?
 
 _NOTE-S: Sorry I probably could have made that a bit more clear, I've re written it to hopefully be better. I didn't actually remove those dates I just added a variable to loans that were charged off after 2015 that marked them as censored. We don't need to remove the date that these variables charged off, although we wouldn't know when exactly they would have been charged off had we collected data at that point and known that they would charge off at some point. Hopefully that clarifies things. 
 -->
 
-To reiterate, we would not need to transform the data this way if we had data on all loans. With our data cleaned, we will now need to find a statistical model to predict survival time from our predictor variables. 
+Before we move on to explaining the math behind Cox regression and creating our model, let's consider how our predictor variables might influence survival time. The effective annual interest rate (EAR) will likely be very influential in our model. When a bank determines a loan's interest rate, many credit risk factors are considered, such as the borrower's credit score, income, and other outstanding debts. If a borrower seems less likely to pay their loan from these factors, a higher than average interest rate will be used. If the borrower seems more likely to repay from these factors a lower than average interest rate will be used. General economic conditions, such as the risk free interest rate, will also play a role in what rate is assigned. Since the interest rate is often determined using credit risk factors, we would expect that this variable will be a key predictor of the loans survival time. The monthly payment will also likely play a large role in survival time, since higher payments will make the loan harder to repay if unforeseen circumstances arise. Now lets look at the math behind Cox regression.
 :::
 
 # Cox Regression
@@ -233,7 +233,7 @@ _NOTE-S: Might not want to include all of those for brevity but I wrote up code 
 
 ```{r}
 #| label: check linearity
-chargeoffNoCategorical = select(Chargeoff_Data_Numeric, Effective_Annual_Interest_Rate, Monthly_Payment, Time_To_Maturity, Original_Loan_Amount, Time_to_Charge_Off)
+chargeoffNoCategorical = select(Chargeoff_Data_Numeric, Effective_Annual_Interest_Rate, Monthly_Payment, Time_To_Maturity, Original_Loan_Amount, Is_Censored, Time_to_Charge_Off)
 ggpairs(chargeoffNoCategorical)
 ```
 
@@ -267,7 +267,7 @@ testPH <- cox.zph(coxMod)
 testPH # If p values are high, we can assume the proportional hazards assumption is met.
 ```
 
-Our p values are all Bad! This indicates that the model doesn't meet the proportional hazards assumption primarily because of the Application_Code and Time_To_Maturity variables To counteract this, we could split the data into three models by application code or stratify the model by application code.
+Our p values are all Bad! This indicates that the model doesn't meet the proportional hazards assumption primarily because of the Application_Code and Time_To_Maturity variables To counteract this, we could split the data into three models by application code or stratify the model by application code. Stratifying the model by application code makes the baseline hazard different for each application code group while still using all of the data to model the coeficents for the variables. 
 
 ```{r}
 #| label: Stratified Cox regression model
@@ -422,7 +422,7 @@ logChargeoffClean = mutate(logChargeoff, Is_Censored = ifelse(Time_to_Charge_Off
 
 FinalCoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment + strata(Application_Code), data = logChargeoffClean)
 
-fit <- survfit(FinalCoxMod, data = logChargeoff)
+fit <- survfit(FinalCoxMod, data = logChargeoffClean)
 ggsurvplot(fit, 
            risk.table = TRUE,
            surv.median.line = "hv", 
@@ -430,6 +430,126 @@ ggsurvplot(fit,
            conf.int = TRUE,         
            palette = "Set1",          
            legend.title = "Application Code", )
+
 ```
 
+We can interpret the curve as the probability of charge off at any given time given that the loan has not charged off up to that point 
 
+One thing I noticed when trying different models was that the term of the loan seemed to have a very significant impact on the model, but made all other variables insignificant. To keep it in the model without causing multicolinearity issues, I am going to try making a model that stratifies the loan by its approximate length:
+long: over 5 years
+medium: 2-5 years
+short: under 2 years
+
+```{r}
+#| label: redo survival curve stratified by the term of the loan
+logChargeoffClean2 = mutate(logChargeoffClean, Term = ifelse(Time_To_Maturity > 365*5, "long", "medium"))
+
+logChargeoffClean2 = mutate(logChargeoffClean2, Term = ifelse((Time_To_Maturity <= 365*2), "short", Term))
+
+
+FinalCoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment + strata(Term), data = logChargeoffClean2)
+
+fit <- survfit(FinalCoxMod, data = logChargeoffClean2)
+ggsurvplot(fit, 
+           risk.table = TRUE,
+           surv.median.line = "hv", 
+           data = logChargeoff, 
+           conf.int = TRUE,         
+           palette = "Set1",          
+           legend.title = "Application Code", )
+
+```
+
+As we can see, the term of the loan does have an effect on the survival curve, so we should make a model that also accounts for that. I found that making a model that still stratifies by the Application_Code, but uses the natural log of Time_To_Maturity and the regular Effective_Annual_Interest_Rate was best. 
+
+```{r}
+#| label: model that takes term into account
+FinalCoxMod2 = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ exp(Effective_Annual_Interest_Rate) + log(Time_To_Maturity) + strata(Application_Code), data = logChargeoffClean)
+
+testPH = cox.zph(FinalCoxMod2) 
+testPH # If p values are high, we can assume the proportional hazards assumption is met.
+
+ggcoxzph(testPH)
+
+ggcoxdiagnostics(FinalCoxMod2, type = "dfbeta",
+                 linear.predictions = FALSE, ggtheme = theme_bw())
+
+ggcoxdiagnostics(FinalCoxMod2, type = "deviance",
+                 linear.predictions = FALSE, ggtheme = theme_bw())
+
+ggcoxfunctional(Surv(Time_to_Charge_Off, Is_Censored) ~ exp(Effective_Annual_Interest_Rate) + Time_To_Maturity, data = logChargeoffClean)
+
+```
+
+Unfortunately it doesn't seem like we can use this model because of the violation of the proportional hazards assumption. So we will stick with the original model that does not include the term of the loan. 
+
+#Model Interperetation
+
+Before we interpret our model coefficients, let's use the model to predict how some hypothetical loans will perform. We will consider two loans. One loan will have a payment of $1000 a month and an effective annual interest rate of 25%, and the other will have a payment of $100 a month and an effective annual interest rate of 2.5%.
+```{r}
+#| label: create some hypothetical loans
+badLoan = data.frame( Monthly_Payment = log(1000), Effective_Annual_Interest_Rate = log(0.25), Application_Code = "CI")
+
+goodLoan = data.frame( Monthly_Payment = log(100), Effective_Annual_Interest_Rate = log(0.025), Application_Code = "CI")
+```
+
+Note that we take the log of both Monthly_Payment and Effective_Annual_Interest_Rate. This is because our model was trained on the logged variables instead of the regular ones, so we must apply the same transformation to these variables too. Now let's see how these loans compare to the average loan in their category.
+
+```{r}
+#| label: create some hypothetical loans
+predict(FinalCoxMod, goodLoan, type = "risk")
+```
+
+This specific loan profile is 0.3662471 times less likely to charge off at any given moment than the average Installment or Traditional Consumer Loan. This indicates it is significantly less risky than the average loan in the Installment or Traditional Consumer Loans category.
+
+```{r}
+#| label: create some hypothetical loans
+predict(FinalCoxMod, badLoan, type = "risk")
+```
+
+This specific loan profile is 1.956174 times more likely to charge off at any given moment than the average Installment or Traditional Consumer Loan.
+
+```{r}
+#| label: create some hypothetical loans
+specificFit = survfit(FinalCoxMod, newdata = goodLoan)
+summary(specificFit, times = c(365))
+```
+
+This summary gives a 95% confidence interval for the loan's true probability of survival up to 365 days from issuance, and some other general information. We can interpret this as:
+
+For an installment or traditional consumer loan with a payment of $100 a month and an effective annual interest rate of 2.5% that will eventually charge off, we are 95% confident that the true probability of the loan not charging off for one year is between 88.4% and 94.3%.
+
+```{r}
+#| label: create some hypothetical loans
+specificFit = survfit(FinalCoxMod, newdata = badLoan)
+summary(specificFit, times = c(365))
+```
+
+For an installment or traditional consumer loan with a payment of $1000 a month and an effective annual interest rate of 25% that will eventually charge off, we are 95% confident that the true probability of the loan not charging off for one year is between 54.9% and 69.0%.
+
+Using the model for predicting a loan's risk is likely the best use case for our model. However we can still glean some valuable information from our model coefficients. Our final model that best met Cox regression's assumptions can be written as:
+$$
+\hat{\lambda_g(t)} = \lambda_{0_g}(t) * e^{0.67445 * ln(EAR) + 0.05318 * ln(Monthly\, Payment)}
+$$
+Where EAR is the effective annual interest rate, Monthly Payment is the monthly payment that would be made on the loan if it were paid through even payments throughout the life of the loan, $\hat{\lambda_g(t)}$ is the hazard at time t for group g, and $\lambda_{0_g}(T)$ is the Baseline hazard for group g, the type of the loan which is either Commercial Loans, Installment or Traditional Consumer Loans, or Real Estate.
+
+Our coefficients can be interpreted using the model summary output we found earlier. Recall that our coefficients were 0.67445 for EAR and 0.05318 for monthly payment. The exponentiated coefficients were 1.96295 and 1.05462 respectively. We can interpret the exponentiated coefficients as:
+
+a 2.718 times increase in the EAR, holding all other variables constant, is associated with a 96.295% increase in the hazard of chargeoff.
+
+a 2.718 times increase in the monthly payment, holding all other variables constant, is associated with a 5.462% increase in the hazard of chargeoff. 
+
+These aren't the most parsimonious interpretations though, so we can also express these as a percentage using the coefficients instead. 
+
+A 1% increase in the EAR is associated with a 0.67345% increase in the hazard of charge-off.
+
+A 10% increase in the monthly payment is associated with a 0.5081% increase in the hazard of charge-off.
+
+Unfortunately because we have stratified the model by application code, there is not a clear way to interpret each code's effect on the model. While this does loose us some information, the added benefit of having a better predictive model that meets the model assumptions is more important.
+
+#Conclusions and Recommendations
+::: {style="text-indent: 30px;"}
+We can conclude from our findings that a higher interest rate plays a major role in the risk of charge off for loans that will eventually charge off. While the supposed monthly payment is less impactful, a very large payment will also increase the hazard of charge off. There appears to be a significant separation between application codes, so the application code should be considered when assessing risk as well. 
+
+While our findings here were from a dataset that only included loans that would charge off eventually, the same process can easily be applied to a mix of loans that will charge off and ones that won't. If this cox regression model were to be applied to a mixed dataset, it could be used to better assess the risk of all loans before they are issued. This could be very helpful for lending decision making, as it could be used to determine the probable loss from a loan, and determine if lending is profitable given the probability of a charge off at a certain point in time. Tracking additional variables like the applicant's credit score, debt to income ratio, age, gender, and income at the time of application could also improve model performance. We would recommend that State Bank of Southern Utah further investigate creating a database with information on all previous loans and their status of charge off, so creating such a model would be possible. 
+:::
