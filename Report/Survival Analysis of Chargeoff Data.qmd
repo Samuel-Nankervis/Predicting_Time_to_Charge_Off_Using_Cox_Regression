@@ -126,18 +126,42 @@ _NOTE-K: I added a bit about age to this section.
   We can use both categorical and quantitative predictor variables in Cox regression, with time automatically acting as a predictor as well. The probability of default at the beginning is not the same as after some time has passed, and the Cox regression format accounts for this.
   
 Mathematics of Cox Regression
-  The following definitions of terms and distributions are relevant for understanding Cox Regression:
+  The following definitions of terms and distributions are relevant for understanding survival curves in general:
   Time before event of interest: $T \geq 0$ , in our case time to loan chargeoff.
   Survival function: $S (t) = P(T > t), 0 < t < \infty$ This function represents the probability that an individual survives longer than a particular amount of time. For our data, that means the probability a loan has not been charged off after a certain amount of time.
    Probability density function: $f(t) = -\dfrac{dS(t)}{dt}$ is the negative derivative of the survival probability function with respect to time. It represents the frequency of the event of interest per period of time.
-   Hazard function: $h(t) = \lim_{\delta t \to 0^+} \dfrac{P(t\leq T < t + \delta t|T\geq t)}{\delta t}$, also represented as $h(t) = f(t)/s(t)$, represents the risk of the event of interest occurring instantly given it has not happened as of time $t$. In other words, what is the risk of the event occurring now if it hasn't yet? For our example, this represents the risk of an immediate loan chargeoff for a loan that hasn't yet charged off after a certain amount of time.
-   Cummulative hazard function: $H(t) = \int_0^t h(u) du$ represents cummulative risk up to a certain time.
-   Relationship between cummulative hazard and survival: $S(t) = e^{-H(t)}$, meaning that higher hazard results in lower probability of survival.
+   Hazard function: $h(t) = \lim_{\delta t \to 0^+} \dfrac{P(t\leq T < t + \delta t|T\geq t)}{\delta t}$, also represented as $h(t) = f(t)/S(t)$, represents the risk of the event of interest occurring instantly given it has not happened as of time $t$. In other words, what is the risk of the event occurring now if it hasn't yet? For our example, this represents the risk of an immediate loan chargeoff for a loan that hasn't yet charged off after a certain amount of time.
+   Cumulative hazard function: $H(t) = \int_0^t h(u) du$ represents cummulative risk up to a certain time.
+   Relationship between cumulative hazard and survival: $S(t) = e^{-H(t)}$, meaning that higher hazard results in lower probability of survival.
    Data for a particular individual:
    $\delta_i$: the censoring indicator, which is 1 if individual $i$ had the event and 0 if they were censored.
    $t_i$: time of event occurrence or of censoring
    $x_i$: the covariates (predictors)
+   The likelihood function: $$L = \Pi_{j \ had \ event}\ f(t_j)\ \Pi_{k \ censored}\ S(t_k) = \Pi^N_{i = 1}\ h(t_i)^{\delta_i}S(t_i)$$
+   This is set up such that individuals for whom we have the time of the event (time to loan chargeoff for our purposes) are used to calculate both the hazard rate at that time and the survival to that time, but individuals who were censored count only for calculating survival to the time where they were censored.
+ What happens in Cox regression:
+  The Cox proportional hazards model:
+  $$h(t;x) = h_0(t)\ e^{\beta x}$$
+  This is for a single predictor/covariate. In the case of multiple covariates, it looks like this:
+  $$h(t;x_1, ..., x_p) = h_0(t)\ e^{\beta_1x_1+...+\beta_px_p}$$
+  The baseline hazard, or $h_0(t)$, is the hazard when all covariates are equal to zero. The Cox regression assumes that the ratio of the baseline hazard to the hazard function, known as the hazard ratio, is constant over time. This will be discussed in more detail in the assumptions section.
+  $x_k$ represents a covariate, and $\beta_k$ is a parameter representing how the covariate affects the outcome. To interpret: As $x_k$ increases by one unit, the relative risk (hazard) is multiplied by $e^{\beta_k}$, holding all else constant. This means that covariates are having an additive effect on the log hazard ratio.
+How $\beta$ values are estimated for Cox regression:
+  Partial likelihood, with the following equation: $$PL(\beta) = \Pi_{t_i: event\  at\  t_i}\ \frac{h_0(t)e^{\beta x_{(t_i)}}}{\sum_{j\epsilon R_{(t_i)}}h_0(t)e^{\beta x_j}}$$
+The product is taken over ordered event times. It represents, in essence, the probability that the individual for whom an event happened at a specific time were to have it happen out of all the individuals also at risk during that time. Or, in other words, the probability it happened in that case instead of any of the other potential cases.
+$R_{(t_i)}$ is the risk set, all those who have neither been censored nor had the event occur at a time directly before time $t_i$.
+$x_{(t_i)}$ is the value of the covariate for the individual for whom the event occurred at time $t_i$. This implicitly assumes that only one individual had the event occur at any given time, but adjustments to deal with that are implemented within the r code and will not be described in detail. 
+The baseline hazard can be canceled out from the numerator and denominator of the partial likelihood, leaving this simplified equation:$$PL(\beta) = \Pi_{t_i: \ event\  at\  t_i}\ \frac{e^{\beta x_{(t_i)}}}{\sum_{j:\ t_j\geq t_i}e^{\beta x_j}}$$
+We treat this partial likelihood as a likelihood, which Cox (1975) showed to be statistically supported. The standard errors for $\beta$ estimates are calculated based on a normal distribution, but this is only approximately accurate. Larger samples make the approximation more accurate, so a small sample size for a Cox regression should be treated with caution. An approximate normal distribution is also used for creating confidence intervals for our estimated hazard ratios.
+The fact that we assume a particular type of relationship between our explanatory variables and survival times but don't assume anything about the shape of survival times makes this method semi-parametric.
+
+Proportional Hazards Assumption:
+  The primary assumption of a Cox regression is that the ratio between overall hazard and baseline hazard functions remains constant over time. When we create a Cox proportional hazards model, we need to check the plausibility of this assumption.
+  There is a test using $\chi^2$ and the Schoenfeld residuals of our model that can be used to assess proportionality. For this test: $H_0:$ Baseline hazard is proportional to the hazard function over time $t$. $H_A:$ Baseline hazard is not proportional to the hazard function over time $t$. Notice that the null is that our assumption is met, meaning this test alone should not be relied upon to check our assumption. Higher p-values here are better, but we should also look at another method.
+  Another option is to graph the scaled Schoenfeld residuals against time. If the variance is fairly consistent and no clear patterns emerge, it suggests our assumption is plausible. (We look at this similarly to residual plots we've used before, just with Schoenfeld residuals.)
+  If our assumption doesn't seem to be met, there are two options. First, we could change the covariates. If we don't want to do that, we can also try stratifying by a categorical variable. That means separating individuals based on some category or strata ($k$). A different baseline hazard can be used for each stratum $k$ to account for differences between the groups, while the covariate effects are the same across all strata. This does not allow us to compare between the groups, but it allows us to interpret our covariates and apply that to all groups.
   
+
 
 #Code
 <!--
