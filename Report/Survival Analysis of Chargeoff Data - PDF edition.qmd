@@ -314,7 +314,9 @@ There are a few things to note about the above histograms and bar charts. First,
 
 ```{r}
 #| label: check linearity
-chargeoffNoCategorical = select(Chargeoff_Data_Numeric, Effective_Annual_Interest_Rate, Monthly_Payment, Time_To_Maturity, Original_Loan_Amount, Is_Censored, Time_to_Charge_Off)
+chargeoffNoCategorical = select(Chargeoff_Data_Numeric, 
+  Effective_Annual_Interest_Rate, Monthly_Payment, Time_To_Maturity, 
+  Original_Loan_Amount, Is_Censored, Time_to_Charge_Off)
 ggpairs(chargeoffNoCategorical)
 ```
 
@@ -324,8 +326,12 @@ Note that there does not seem to be a high correlation between the Is_Censored a
 
 ```{r}
 #| label: check log linearity
-logChargeoff = mutate(Chargeoff_Data_Numeric, Monthly_Payment = log(Monthly_Payment), Original_Loan_Amount = log(Original_Loan_Amount), Effective_Annual_Interest_Rate = log(Effective_Annual_Interest_Rate))
-chargeoffNoCategorical = select(logChargeoff, Effective_Annual_Interest_Rate, Monthly_Payment, Time_To_Maturity, Original_Loan_Amount, Time_to_Charge_Off)
+logChargeoff = mutate(Chargeoff_Data_Numeric, 
+  Monthly_Payment = log(Monthly_Payment), 
+  Original_Loan_Amount = log(Original_Loan_Amount), 
+  Effective_Annual_Interest_Rate = log(Effective_Annual_Interest_Rate))
+chargeoffNoCategorical = select(logChargeoff, Effective_Annual_Interest_Rate, 
+  Monthly_Payment, Time_To_Maturity, Original_Loan_Amount, Time_to_Charge_Off)
 
 ggpairs(chargeoffNoCategorical)
 ```
@@ -336,7 +342,9 @@ There is a strong linear correlation between the log payment and log loan amount
 
 ```{r}
 #| label: Cox regression model
-coxMod <- coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment + Time_To_Maturity + Original_Loan_Amount+ Application_Code, data = logChargeoff)
+coxMod <- coxph(Surv(Time_to_Charge_Off, Is_Censored)
+  ~ Effective_Annual_Interest_Rate + Monthly_Payment + Time_To_Maturity + 
+  Original_Loan_Amount+ Application_Code, data = logChargeoff)
 coxMod
 ```
 
@@ -348,7 +356,7 @@ A few coefficients seem to be significant from the low p values in this model, b
 ```{r}
 #| label: Testing Proportional Hazards assumption
 testPH <- cox.zph(coxMod) 
-testPH # If p values are high, we can assume the proportional hazards assumption is met.
+testPH # If p values are high, assume the proportional hazards assumption is met.
 ```
 
 ::: {style="text-indent: 30px;"}
@@ -357,7 +365,9 @@ Our p values are all Bad! This indicates that the model doesn't meet the proport
 
 ```{r}
 #| label: Stratified Cox regression model
-stratCoxMod <- coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment + Time_To_Maturity + Original_Loan_Amount + strata(Application_Code), data = logChargeoff)
+stratCoxMod <- coxph(Surv(Time_to_Charge_Off, Is_Censored)
+  ~ Effective_Annual_Interest_Rate + Monthly_Payment + Time_To_Maturity 
+  + Original_Loan_Amount + strata(Application_Code), data = logChargeoff)
 stratCoxMod
 
 testPH <- cox.zph(stratCoxMod) 
@@ -389,10 +399,10 @@ Now let's check for influential observations. We do this by plotting the residua
 #| out-width: "50%"
 #| out-height: "33%"
 ggcoxdiagnostics(stratCoxMod, type = "dfbeta",
-                 linear.predictions = FALSE, ggtheme = theme_bw())
+  linear.predictions = FALSE, ggtheme = theme_bw())
 
 ggcoxdiagnostics(stratCoxMod, type = "deviance",
-                 linear.predictions = FALSE, ggtheme = theme_bw())
+  linear.predictions = FALSE, ggtheme = theme_bw())
 ```
 
 ::: {style="text-indent: 30px;"}
@@ -406,7 +416,9 @@ Lastly, we need to check if the variables have a linear form. We can check this 
 #| fig-height: 5
 #| out-width: "50%"
 #| out-height: "33%"
-ggcoxfunctional(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment + Time_To_Maturity + Original_Loan_Amount, data = logChargeoff)
+ggcoxfunctional(Surv(Time_to_Charge_Off, Is_Censored)
+  ~ Effective_Annual_Interest_Rate + Monthly_Payment + Time_To_Maturity 
+  + Original_Loan_Amount, data = logChargeoff)
 ```
 
 ::: {style="text-indent: 30px;"}
@@ -424,7 +436,9 @@ It appears that some of our VIFs are well above 5. To compensate, we will drop T
 
 ```{r}
 #| label: Cox regression model better VIF
-VifCoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment + strata(Application_Code), data = logChargeoff)
+VifCoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ 
+  Effective_Annual_Interest_Rate + Monthly_Payment + strata(Application_Code),
+  data = logChargeoff)
 VifCoxMod
 vif(VifCoxMod)
 ```
@@ -438,7 +452,7 @@ The VIFs look far better now! Let's check the rest of the assumptions.
 #| out-width: "100%"
 #| out-height: "50%"
 testPH = cox.zph(VifCoxMod) 
-testPH # If p values are high, we can assume the proportional hazards assumption is met.
+testPH # If p values are high, assume the proportional hazards assumption is met.
 
 ggcoxzph(testPH)
 ```
@@ -449,12 +463,13 @@ ggcoxzph(testPH)
 #| fig-height: 3
 #| out-width: "100%"
 ggcoxdiagnostics(VifCoxMod, type = "dfbeta",
-                 linear.predictions = FALSE, ggtheme = theme_bw())
+  linear.predictions = FALSE, ggtheme = theme_bw())
 
 ggcoxdiagnostics(VifCoxMod, type = "deviance",
-                 linear.predictions = FALSE, ggtheme = theme_bw())
+  linear.predictions = FALSE, ggtheme = theme_bw())
 
-ggcoxfunctional(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment, data = logChargeoff)
+ggcoxfunctional(Surv(Time_to_Charge_Off, Is_Censored) ~ 
+  Effective_Annual_Interest_Rate + Monthly_Payment, data = logChargeoff)
 ```
 
 We can also check the linearity assumption by plotting the martingale residuals vs the payments. the relation should be mostly linear.
@@ -466,7 +481,8 @@ We can also check the linearity assumption by plotting the martingale residuals 
 #| out-width: "100%"
 #| echo: false
 # 1. Fit the model
-res.cox = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + strata(Application_Code), data = logChargeoff)
+res.cox = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ 
+  Effective_Annual_Interest_Rate + strata(Application_Code), data = logChargeoff)
 # 2. Calculate Martingale residuals
 mart_res <- residuals(res.cox, type = "martingale")
 martChargeoff = mutate(logChargeoff, martRes = mart_res)
@@ -479,7 +495,8 @@ p1 = ggplot(martChargeoff, aes(x = Monthly_Payment, y = mart_res)) +
        y = "Martingale Residuals")
 
 # 1. Fit the model
-res.cox <- coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + strata(Application_Code), data = logChargeoff)
+res.cox <- coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ 
+  Effective_Annual_Interest_Rate + strata(Application_Code), data = logChargeoff)
 # 2. Calculate Martingale residuals
 mart_res <- residuals(res.cox, type = "martingale")
 martChargeoff = mutate(logChargeoff, martRes = mart_res)
@@ -506,13 +523,16 @@ CCdata = filter(logChargeoff, Application_Code == "CC")
 CRdata = filter(logChargeoff, Application_Code == "CR")
 CIdata = filter(logChargeoff, Application_Code == "CI")
 
-CC_CoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment, data = CCdata)
+CC_CoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ 
+  Effective_Annual_Interest_Rate + Monthly_Payment, data = CCdata)
 CC_CoxMod
 
-CR_CoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment, data = CRdata)
+CR_CoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ 
+  Effective_Annual_Interest_Rate + Monthly_Payment, data = CRdata)
 CR_CoxMod
 
-CI_CoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment, data = CIdata)
+CI_CoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ 
+  Effective_Annual_Interest_Rate + Monthly_Payment, data = CIdata)
 CI_CoxMod
 ```
 
@@ -526,7 +546,9 @@ Let's look at the Survival curve for our final stratified model:
 #| label: survival curve 
 #| fig-width: 10
 #| fig-height: 7
-FinalCoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment + strata(Application_Code), data = logChargeoff)
+FinalCoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ 
+  Effective_Annual_Interest_Rate + Monthly_Payment + strata(Application_Code),
+  data = logChargeoff)
 
 fit <- survfit(FinalCoxMod, data = logChargeoff)
 ggsurvplot(fit, 
@@ -547,9 +569,13 @@ The survival curve is good, but seems to be influenced by some extreme outliers.
 #| label: censor extreme outliers and redo survival curve
 #| fig-width: 10
 #| fig-height: 7
-logChargeoffClean = mutate(logChargeoff, Is_Censored = ifelse(Time_to_Charge_Off > 5500, 1, Is_Censored), Time_to_Charge_Off = ifelse(Time_to_Charge_Off > 5500, 5500, Time_to_Charge_Off))
+logChargeoffClean = mutate(logChargeoff, Is_Censored = 
+  ifelse(Time_to_Charge_Off > 5500, 1, Is_Censored), Time_to_Charge_Off = 
+  ifelse(Time_to_Charge_Off > 5500, 5500, Time_to_Charge_Off))
 
-FinalCoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment + strata(Application_Code), data = logChargeoffClean)
+FinalCoxMod = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ 
+  Effective_Annual_Interest_Rate + Monthly_Payment + strata(Application_Code), 
+  data = logChargeoffClean)
 
 fit <- survfit(FinalCoxMod, data = logChargeoffClean)
 ggsurvplot(fit, 
@@ -576,12 +602,16 @@ short: under 2 years
 #| label: redo survival curve stratified by the term of the loan
 #| fig-width: 10
 #| fig-height: 7
-logChargeoffClean2 = mutate(logChargeoffClean, Term = ifelse(Time_To_Maturity > 365*5, "long", "medium"))
+logChargeoffClean2 = mutate(logChargeoffClean, 
+  Term = ifelse(Time_To_Maturity > 365*5, "long", "medium"))
 
-logChargeoffClean2 = mutate(logChargeoffClean2, Term = ifelse((Time_To_Maturity <= 365*2), "short", Term))
+logChargeoffClean2 = mutate(logChargeoffClean2, 
+  Term = ifelse((Time_To_Maturity <= 365*2), "short", Term))
 
 
-FinalCoxMod2 = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ Effective_Annual_Interest_Rate + Monthly_Payment + strata(Term), data = logChargeoffClean2)
+FinalCoxMod2 = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ 
+  Effective_Annual_Interest_Rate + Monthly_Payment + strata(Term), 
+  data = logChargeoffClean2)
 
 fit <- survfit(FinalCoxMod2, data = logChargeoffClean2)
 ggsurvplot(fit, 
@@ -604,10 +634,12 @@ As we can see, the term of the loan does have an effect on the survival curve, s
 #| fig-height: 12
 #| out-width: "100%"
 #| out-height: "70%"
-FinalCoxMod2 = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ exp(Effective_Annual_Interest_Rate) + log(Time_To_Maturity) + strata(Application_Code), data = logChargeoffClean)
+FinalCoxMod2 = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ 
+  exp(Effective_Annual_Interest_Rate) + log(Time_To_Maturity) + 
+  strata(Application_Code), data = logChargeoffClean)
 
 testPH = cox.zph(FinalCoxMod2) 
-testPH # If p values are high, we can assume the proportional hazards assumption is met.
+testPH # If p values are high, assume the proportional hazards assumption is met.
 
 ggcoxzph(testPH)
 ```
@@ -617,20 +649,23 @@ ggcoxzph(testPH)
 #| fig-width: 7
 #| fig-height: 3
 #| out-width: "100%"
-FinalCoxMod2 = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ exp(Effective_Annual_Interest_Rate) + log(Time_To_Maturity) + strata(Application_Code), data = logChargeoffClean)
+FinalCoxMod2 = coxph(Surv(Time_to_Charge_Off, Is_Censored) ~ 
+  exp(Effective_Annual_Interest_Rate) + log(Time_To_Maturity) + 
+  strata(Application_Code), data = logChargeoffClean)
 
 testPH = cox.zph(FinalCoxMod2) 
-testPH # If p values are high, we can assume the proportional hazards assumption is met.
+testPH # If p values are high, assume the proportional hazards assumption is met.
 
 ggcoxzph(testPH)
 
 ggcoxdiagnostics(FinalCoxMod2, type = "dfbeta",
-                 linear.predictions = FALSE, ggtheme = theme_bw())
+  linear.predictions = FALSE, ggtheme = theme_bw())
 
 ggcoxdiagnostics(FinalCoxMod2, type = "deviance",
-                 linear.predictions = FALSE, ggtheme = theme_bw())
+  linear.predictions = FALSE, ggtheme = theme_bw())
 
-ggcoxfunctional(Surv(Time_to_Charge_Off, Is_Censored) ~ exp(Effective_Annual_Interest_Rate) + Time_To_Maturity, data = logChargeoffClean)
+ggcoxfunctional(Surv(Time_to_Charge_Off, Is_Censored) ~ 
+  exp(Effective_Annual_Interest_Rate) + Time_To_Maturity, data = logChargeoffClean)
 ```
 
 ::: {style="text-indent: 30px;"}
@@ -646,9 +681,11 @@ Before we interpret our model coefficients, let's use the model to predict how s
 ```{r}
 #| label: create some hypothetical loans
 #| echo: false
-badLoan = data.frame( Monthly_Payment = log(1000), Effective_Annual_Interest_Rate = log(0.25), Application_Code = "CI")
+badLoan = data.frame( Monthly_Payment = log(1000), 
+  Effective_Annual_Interest_Rate = log(0.25), Application_Code = "CI")
 badLoan
-goodLoan = data.frame( Monthly_Payment = log(100), Effective_Annual_Interest_Rate = log(0.025), Application_Code = "CI")
+goodLoan = data.frame( Monthly_Payment = log(100), 
+  Effective_Annual_Interest_Rate = log(0.025), Application_Code = "CI")
 goodLoan
 ```
 
@@ -693,10 +730,11 @@ Using the model for predicting a loan's risk is likely the best use case for our
 :::
 
 $$
-\hat{\lambda_g(t)} = \lambda_{0_g}(t) * e^{0.67445 * ln(EAR) + 0.05318 * ln(Monthly\, Payment)}
+h_g(t;EAR,Monthly\, Payment) = h_{0_g}(t) * e^{0.67445 * ln(EAR) + 0.05318 * ln(Monthly\, Payment)}
 $$
 
-<!--The notation you used here doesn't quite match what I found, should we change one or the other? -->
+<!--The notation you used here doesn't quite match what I found, should we change one or the other? 
+Should be fixed now.-->
 
 ::: {style="text-indent: 30px;"}
 Where EAR is the effective annual interest rate, Monthly Payment is the monthly payment that would be made on the loan if it were paid through even payments throughout the life of the loan, $\hat{\lambda_g(t)}$ is the hazard at time t for group g, and $\lambda_{0_g}(T)$ is the Baseline hazard for group g, the type of the loan which is either Commercial Loans, Installment or Traditional Consumer Loans, or Real Estate.
