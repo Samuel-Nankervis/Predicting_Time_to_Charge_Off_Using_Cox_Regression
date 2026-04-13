@@ -737,7 +737,7 @@ $$
 Should be fixed now.-->
 
 ::: {style="text-indent: 30px;"}
-Where EAR is the effective annual interest rate, Monthly Payment is the monthly payment that would be made on the loan if it were paid through even payments throughout the life of the loan, $\hat{\lambda_g(t)}$ is the hazard at time t for group g, and $\lambda_{0_g}(T)$ is the Baseline hazard for group g, the type of the loan which is either Commercial Loans, Installment or Traditional Consumer Loans, or Real Estate.
+Where EAR is the effective annual interest rate, Monthly Payment is the monthly payment that would be made on the loan if it were paid through even payments throughout the life of the loan, $h_g(t)$ is the hazard at time t for group g, and $h_{0_g}(T)$ is the Baseline hazard for group g, the type of the loan which is either Commercial Loans, Installment or Traditional Consumer Loans, or Real Estate.
 
 Our coefficients can be interpreted using the model summary output we found earlier. Recall that our coefficients were 0.67445 for EAR and 0.05318 for monthly payment. The exponentiated coefficients were 1.96295 and 1.05462 respectively. We can interpret the exponentiated coefficients as:
 :::
